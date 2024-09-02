@@ -120,10 +120,13 @@ Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 for epoch in range(opt.n_epochs):
     for i, (imgs, _) in enumerate(dataloader):
+        
+        B = imgs.shape[0]
 
         # Adversarial ground truths
-        valid = Variable(Tensor(imgs.size(0), 1).fill_(1.0), requires_grad=False)
-        fake = Variable(Tensor(imgs.size(0), 1).fill_(0.0), requires_grad=False)
+        # valid, fake : [B, 1]
+        valid = Variable(Tensor(B, 1).fill_(1.0), requires_grad=False)
+        fake = Variable(Tensor(B, 1).fill_(0.0), requires_grad=False)
 
         # Configure input
         real_imgs = Variable(imgs.type(Tensor))
@@ -135,14 +138,18 @@ for epoch in range(opt.n_epochs):
         optimizer_G.zero_grad()
 
         # Sample noise as generator input
-        z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], opt.latent_dim))))
+        # z : [B, 100]
+        z = Variable(Tensor(np.random.normal(0, 1, (B, opt.latent_dim))))
 
         # Generate a batch of images
+        # gen_imgs : [B, C, W, H]
         gen_imgs = generator(z)
 
         # Loss measures generator's ability to fool the discriminator
+        # discriminator(gen_imgs) : [B, 1]
         g_loss = adversarial_loss(discriminator(gen_imgs), valid)
 
+        # generator의 입장에서는 생성한 이미지가 discriminator로 부터 real로 판별되는 것이 목표이므로, valid를 기준으로 loss가 사용됨.
         g_loss.backward()
         optimizer_G.step()
 
@@ -153,6 +160,9 @@ for epoch in range(opt.n_epochs):
         optimizer_D.zero_grad()
 
         # Measure discriminator's ability to classify real from generated samples
+        
+        # discriminator의 입장에서는 real image는 real으로, generated image는 fake로 판별해야하므로 아래와 같이 두 가지 경우의 loss의 평균을 사용한다.
+        # gen_imgs로 부터 generator의 loss가 업데이트 되지 않도록 detach를 사용한 후에 discriminator을 사용했다.
         real_loss = adversarial_loss(discriminator(real_imgs), valid)
         fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
         d_loss = (real_loss + fake_loss) / 2
